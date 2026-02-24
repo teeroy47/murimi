@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: murimi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: murimi
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - murimi_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: murimi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  murimi_pg_data:

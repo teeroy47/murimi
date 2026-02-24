@@ -1,0 +1,734 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum AnimalType {
+  PIG
+}
+
+enum AnimalSex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum AnimalStage {
+  PIGLET
+  GROWER
+  FINISHER
+  SOW
+  BOAR
+}
+
+enum AnimalStatus {
+  ACTIVE
+  SOLD
+  SLAUGHTERED
+  DEAD
+  ARCHIVED
+}
+
+enum ScheduleTemplateType {
+  VACCINE
+  MED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  OVERRIDE
+  SYNC_APPLY
+}
+
+enum SyncOperation {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+model User {
+  id                String           @id @default(uuid())
+  email             String           @unique
+  passwordHash      String
+  displayName       String?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  memberships       Membership[]
+  invitedByInvites  FarmInvite[]     @relation("InvitedBy")
+  refreshSessions   RefreshSession[]
+  auditLogs         AuditLog[]       @relation("AuditActor")
+  overrideEvents    OverrideEvent[]  @relation("OverrideActor")
+  clientDevices     ClientDevice[]
+  syncMutationLogs  SyncMutationLog[]
+}
+
+model Farm {
+  id            String         @id @default(uuid())
+  name          String
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  theme         FarmTheme?
+  memberships   Membership[]
+  invites       FarmInvite[]
+  roles         Role[]
+  sections      Section[]
+  pens          Pen[]
+  batches       Batch[]
+  animals       Animal[]
+  feedTypes      FeedType[]
+  rationPlans    RationPlan[]
+  feedingEvents  FeedingEvent[]
+  weightRecords  WeightRecord[]
+  waterChecks    WaterCheck[]
+  heatEvents     HeatEvent[]
+  serviceEvents  ServiceEvent[]
+  pregnancyChecks PregnancyCheck[]
+  farrowingEvents FarrowingEvent[]
+  medicines      Medicine[]
+  scheduleTemplates ScheduleTemplate[]
+  symptomEvents   SymptomEvent[]
+  treatmentEvents TreatmentEvent[]
+  kbArticles      KBArticle[]
+  diagnosisRules  DiagnosisRule[]
+  slaughterRules  SlaughterRule[]
+  slaughterEvents SlaughterEvent[]
+  overrideEvents  OverrideEvent[]
+  farmMap         FarmMap?
+  auditLogs       AuditLog[]
+  clientDevices   ClientDevice[]
+  syncMutationLogs SyncMutationLog[]
+  changeCursors   ChangeCursor[]
+}
+
+model FarmTheme {
+  id            String   @id @default(uuid())
+  farmId         String   @unique
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  fontFamily     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  farm           Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+}
+
+model Membership {
+  id        String           @id @default(uuid())
+  userId     String
+  farmId     String
+  roleId     String
+  status     MembershipStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm       Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  role       Role             @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, farmId])
+  @@index([farmId, userId])
+}
+
+model Role {
+  id             String           @id @default(uuid())
+  farmId          String
+  name            String
+  description     String?
+  isSystem        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  farm            Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  memberships     Membership[]
+  rolePermissions RolePermission[]
+
+  @@unique([farmId, name])
+  @@index([farmId])
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  resource        String
+  action          String
+  description     String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model FarmInvite {
+  id             String       @id @default(uuid())
+  farmId          String
+  email           String
+  roleId          String
+  tokenHash       String
+  status          InviteStatus @default(PENDING)
+  invitedById     String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  farm            Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  role            Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  invitedBy       User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([farmId, email, status])
+}
+
+model RefreshSession {
+  id               String   @id @default(uuid())
+  userId            String
+  tokenHash         String
+  userAgent         String?
+  ipAddress         String?
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedById      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Section {
+  id          String   @id @default(uuid())
+  farmId       String
+  name         String
+  notes        String?
+  version      Int      @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  pens         Pen[]
+
+  @@unique([farmId, name])
+  @@index([farmId, updatedAt])
+}
+
+model Pen {
+  id          String   @id @default(uuid())
+  farmId       String
+  sectionId    String?
+  code         String
+  capacity     Int?
+  notes        String?
+  version      Int      @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  section      Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  animals      Animal[] @relation("AnimalCurrentPen")
+
+  @@unique([farmId, code])
+  @@index([farmId, sectionId])
+  @@index([farmId, updatedAt])
+}
+
+model Batch {
+  id          String   @id @default(uuid())
+  farmId       String
+  name         String
+  notes        String?
+  version      Int      @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animals      BatchAnimal[]
+  feedingEvents FeedingEvent[]
+  weightRecords WeightRecord[]
+  treatmentEvents TreatmentEvent[]
+
+  @@unique([farmId, name])
+  @@index([farmId, updatedAt])
+}
+
+model BatchAnimal {
+  batchId     String
+  animalId    String
+  joinedAt    DateTime @default(now())
+  batch       Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  animal      Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, animalId])
+}
+
+model Animal {
+  id            String       @id @default(uuid())
+  farmId         String
+  type           AnimalType   @default(PIG)
+  tag            String
+  sex            AnimalSex    @default(UNKNOWN)
+  dob            DateTime?
+  stage          AnimalStage
+  status         AnimalStatus @default(ACTIVE)
+  currentPenId   String?
+  notes          String?
+  version        Int          @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  farm           Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  currentPen     Pen?         @relation("AnimalCurrentPen", fields: [currentPenId], references: [id], onDelete: SetNull)
+  batchLinks     BatchAnimal[]
+  weightRecords  WeightRecord[]
+  heatEvents     HeatEvent[]      @relation("HeatSow")
+  serviceEventsAsSow ServiceEvent[] @relation("ServiceSow")
+  serviceEventsAsBoar ServiceEvent[] @relation("ServiceBoar")
+  pregnancyChecks PregnancyCheck[]
+  farrowingEvents FarrowingEvent[]
+  symptomEvents   SymptomEvent[]
+  treatmentEvents TreatmentEvent[]
+  slaughterEvents SlaughterEvent[]
+
+  @@unique([farmId, tag])
+  @@index([farmId, currentPenId])
+  @@index([farmId, updatedAt])
+}
+
+model FeedType {
+  id          String   @id @default(uuid())
+  farmId       String
+  name         String
+  notes        String?
+  version      Int      @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  rationPlans  RationPlan[]
+  feedingEvents FeedingEvent[]
+
+  @@unique([farmId, name])
+  @@index([farmId, updatedAt])
+}
+
+model RationPlan {
+  id                      String   @id @default(uuid())
+  farmId                   String
+  stage                    String
+  feedTypeId               String
+  targetGPerHeadPerDay     Float
+  scheduleJson             Json?
+  version                  Int      @default(1)
+  deletedAt                DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  farm                     Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  feedType                 FeedType @relation(fields: [feedTypeId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, stage])
+  @@index([farmId, updatedAt])
+}
+
+model FeedingEvent {
+  id             String   @id @default(uuid())
+  farmId          String
+  penId           String?
+  batchId         String?
+  feedTypeId      String
+  totalAmountKg   Float
+  headCount       Int
+  eventDate       DateTime
+  notes           String?
+  version         Int      @default(1)
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  farm            Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  pen             Pen?     @relation(fields: [penId], references: [id], onDelete: SetNull)
+  batch           Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  feedType        FeedType @relation(fields: [feedTypeId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, eventDate])
+  @@index([farmId, updatedAt])
+}
+
+model WeightRecord {
+  id           String   @id @default(uuid())
+  farmId        String
+  animalId      String?
+  batchId       String?
+  weightKg      Float
+  recordedAt    DateTime
+  notes         String?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animal        Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  batch         Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, recordedAt])
+  @@index([farmId, animalId, recordedAt])
+  @@index([farmId, batchId, recordedAt])
+  @@index([farmId, updatedAt])
+}
+
+model WaterCheck {
+  id           String   @id @default(uuid())
+  farmId        String
+  penId         String
+  isAvailable   Boolean
+  notes         String?
+  checkedAt     DateTime
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  pen           Pen      @relation(fields: [penId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, checkedAt])
+  @@index([farmId, updatedAt])
+}
+
+model HeatEvent {
+  id           String   @id @default(uuid())
+  farmId        String
+  sowAnimalId   String
+  observedAt    DateTime
+  signsJson     Json?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sow           Animal   @relation("HeatSow", fields: [sowAnimalId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, observedAt])
+  @@index([farmId, updatedAt])
+}
+
+model ServiceEvent {
+  id                String   @id @default(uuid())
+  farmId             String
+  sowAnimalId        String
+  boarAnimalId       String?
+  servicedAt         DateTime
+  expectedFarrowAt   DateTime
+  notes              String?
+  version            Int      @default(1)
+  deletedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  farm               Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sow                Animal   @relation("ServiceSow", fields: [sowAnimalId], references: [id], onDelete: Restrict)
+  boar               Animal?  @relation("ServiceBoar", fields: [boarAnimalId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, servicedAt])
+  @@index([farmId, expectedFarrowAt])
+  @@index([farmId, updatedAt])
+}
+
+model PregnancyCheck {
+  id            String   @id @default(uuid())
+  farmId         String
+  sowAnimalId    String
+  checkedAt      DateTime
+  isPregnant     Boolean
+  notes          String?
+  version        Int      @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  farm           Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sow            Animal   @relation(fields: [sowAnimalId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, checkedAt])
+  @@index([farmId, updatedAt])
+}
+
+model FarrowingEvent {
+  id           String   @id @default(uuid())
+  farmId        String
+  sowAnimalId   String
+  farrowedAt    DateTime
+  bornAlive     Int
+  stillborn     Int
+  notes         String?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sow           Animal   @relation(fields: [sowAnimalId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, farrowedAt])
+  @@index([farmId, updatedAt])
+}
+
+model Medicine {
+  id                    String   @id @default(uuid())
+  farmId                 String
+  name                   String
+  defaultWithdrawalDays  Int?
+  notes                  String?
+  version                Int      @default(1)
+  deletedAt              DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  farm                   Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  scheduleTemplates      ScheduleTemplate[]
+  treatmentEvents        TreatmentEvent[]
+
+  @@unique([farmId, name])
+  @@index([farmId, updatedAt])
+}
+
+model ScheduleTemplate {
+  id          String               @id @default(uuid())
+  farmId       String
+  type         ScheduleTemplateType
+  stage        String?
+  ageDays      Int?
+  medicineId   String?
+  notes        String?
+  version      Int      @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  medicine     Medicine? @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, updatedAt])
+}
+
+model SymptomEvent {
+  id           String   @id @default(uuid())
+  farmId        String
+  animalId      String?
+  penId         String?
+  symptomsJson  Json
+  observedAt    DateTime
+  notes         String?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animal        Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  pen           Pen?     @relation(fields: [penId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, observedAt])
+  @@index([farmId, updatedAt])
+}
+
+model TreatmentEvent {
+  id              String   @id @default(uuid())
+  farmId           String
+  animalId         String?
+  batchId          String?
+  medicineId       String
+  dose             String
+  administeredAt   DateTime
+  withdrawalEndAt  DateTime?
+  notes            String?
+  version          Int      @default(1)
+  deletedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  farm             Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animal           Animal?  @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  batch            Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, administeredAt])
+  @@index([farmId, updatedAt])
+}
+
+model KBArticle {
+  id           String   @id @default(uuid())
+  farmId        String
+  title         String
+  body          String
+  tagsJson      Json?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, updatedAt])
+}
+
+model DiagnosisRule {
+  id                       String   @id @default(uuid())
+  farmId                    String
+  conditionsJson            Json?
+  symptomsJson              Json
+  stageConstraint           String?
+  minAgeDays                Int?
+  maxAgeDays                Int?
+  suggestedActionsJson      Json?
+  suggestedMedicinesJson    Json?
+  version                   Int      @default(1)
+  deletedAt                 DateTime?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  farm                      Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, updatedAt])
+}
+
+model SlaughterRule {
+  id                       String   @id @default(uuid())
+  farmId                    String
+  livestockType             String   @default("PIG")
+  stage                     String?
+  minWeightKg               Float
+  maxWeightKg               Float
+  minAgeDays                Int?
+  requireRecentWeightDays   Int?
+  blockIfWithdrawal         Boolean  @default(true)
+  overrideRoleIdsJson       Json?
+  version                   Int      @default(1)
+  deletedAt                 DateTime?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  farm                      Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, livestockType, updatedAt])
+}
+
+model SlaughterEvent {
+  id               String   @id @default(uuid())
+  farmId            String
+  animalId          String
+  slaughteredAt     DateTime
+  liveWeightKg      Float
+  carcassWeightKg   Float?
+  destination       String?
+  notes             String?
+  version           Int      @default(1)
+  deletedAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  farm              Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  animal            Animal   @relation(fields: [animalId], references: [id], onDelete: Restrict)
+
+  @@index([farmId, slaughteredAt])
+  @@index([farmId, updatedAt])
+}
+
+model OverrideEvent {
+  id              String   @id @default(uuid())
+  farmId           String
+  entityType       String
+  entityId         String
+  reason           String
+  overriddenById   String
+  overriddenAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  farm             Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  overriddenBy     User     @relation("OverrideActor", fields: [overriddenById], references: [id], onDelete: Restrict)
+
+  @@index([farmId, entityType, entityId])
+}
+
+model FarmMap {
+  id           String   @id @default(uuid())
+  farmId        String   @unique
+  mapJson       Json
+  version       Int      @default(1)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id           String     @id @default(uuid())
+  farmId        String
+  actorUserId   String?
+  entityType    String
+  entityId      String
+  action        AuditAction
+  timestamp     DateTime   @default(now())
+  requestId     String?
+  deviceId      String?
+  beforeJson    Json?
+  afterJson     Json?
+  farm          Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  actorUser     User?      @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, timestamp])
+  @@index([farmId, entityType, entityId])
+}
+
+model ClientDevice {
+  id           String   @id
+  farmId        String
+  userId        String
+  deviceName    String?
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  farm          Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncMutations SyncMutationLog[]
+
+  @@unique([farmId, id])
+  @@index([farmId, userId])
+}
+
+model SyncMutationLog {
+  id                String   @id @default(uuid())
+  farmId             String
+  deviceId           String
+  userId             String
+  clientMutationId   String
+  entityType         String
+  entityId           String
+  operation          SyncOperation
+  appliedAt          DateTime @default(now())
+  resultJson         Json?
+  farm               Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  device             ClientDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, clientMutationId])
+  @@index([farmId, appliedAt])
+}
+
+model ChangeCursor {
+  id         String   @id @default(uuid())
+  farmId      String
+  entityType  String
+  entityId    String
+  changedAt   DateTime @default(now())
+  version     Int
+  deletedAt   DateTime?
+  farm        Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, changedAt])
+  @@index([farmId, entityType, entityId, changedAt])
+}

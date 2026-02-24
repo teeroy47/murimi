@@ -23,12 +23,13 @@ This file documents how the current Murimi frontend solution was built and must 
 ## Project Overview
 
 - Project name: `murimi`
-- Current scope: frontend only (no backend/API yet)
+- Current scope: full-stack in progress (frontend exists, backend scaffold and core MVP APIs added under `backend/`)
 - Domain: piggery / farm operations management
 - App style: dashboard + operational modules
 
 ## Tech Stack
 
+- Frontend:
 - Vite
 - React 18
 - TypeScript
@@ -37,6 +38,15 @@ This file documents how the current Murimi frontend solution was built and must 
 - shadcn-ui / Radix UI components
 - TanStack React Query (provider set up, backend integration not yet implemented)
 - Vitest (basic scaffold test present)
+- Backend:
+- NestJS + TypeScript
+- Prisma ORM
+- PostgreSQL
+- Redis (foundation for BullMQ/background jobs)
+- JWT auth (access + refresh token rotation)
+- Argon2 password hashing
+- `class-validator` for DTO validation
+- Swagger/OpenAPI (`/api/docs`)
 
 ## How The App Is Structured
 
@@ -49,6 +59,26 @@ This file documents how the current Murimi frontend solution was built and must 
     - Toasters (`toaster` + `sonner`)
     - `BrowserRouter`
   - Uses a shared app shell (`AppLayout`) around routes
+
+## Backend Structure (NestJS)
+
+- Backend root: `backend/`
+- Bootstrap:
+  - `backend/src/main.ts` (global validation, exception filter, response interceptor, Swagger)
+  - `backend/src/app.module.ts`
+- Shared/common:
+  - `backend/src/common/guards/*` (JWT, farm membership, permissions)
+  - `backend/src/common/decorators/*` (`Authz`, `RequirePermissions`, `CurrentUser`, `Public`)
+  - `backend/src/common/filters/*` / `interceptors/*`
+- Prisma:
+  - `backend/prisma/schema.prisma` (domain schema + audit + sync + RBAC models)
+  - `backend/prisma/seed.ts`
+  - `backend/src/prisma/prisma.service.ts`
+- Domain modules:
+  - `auth`, `farms`, `memberships`, `users`, `roles`, `permissions`
+  - `animals`, `pens`, `batches`
+  - `nutrition`, `breeding`, `health`, `slaughter`
+  - `farm-map`, `reports`, `audit`, `sync`
 
 ## Layout / Navigation
 
@@ -165,23 +195,32 @@ Defined in `src/App.tsx`:
 
 ## Data & State (Current)
 
-- No backend
-- No local database
-- No API calls implemented
-- Most page data is embedded directly in page components as arrays/objects
-- React Query is prepared for future API integration but not used yet for real data fetching
+- Frontend state:
+- Most page data is still embedded directly in page components as arrays/objects
+- React Query is prepared for future API integration but not yet wired to live endpoints
+- Backend state:
+- PostgreSQL + Prisma schema defined for multi-tenant farms, RBAC, pigs, nutrition, breeding, health, slaughter, map, audit, and sync
+- Audit log + change cursor models included for write tracking and sync pull
+- Offline sync versioning strategy implemented with `version`, `updatedAt`, `deletedAt` on sync-capable entities
 
 ## Testing (Current)
 
 - Test setup exists (`vitest`)
 - Example placeholder test exists: `src/test/example.test.ts`
 - No feature/component tests implemented yet
+- Backend tests added (`jest`):
+- Unit tests for slaughter eligibility logic
+- Unit tests for sync conflict version mismatch logic
+- Guard-level integration-oriented tests for farm membership / tenant isolation behavior
 
 ## Known Gaps / Notes
 
 - Some UI strings show character encoding artifacts (garbled emoji/punctuation) in a few files.
 - `src/pages/Index.tsx` exists as template/fallback content but is not used by current routing.
 - Forms are currently presentation-only and do not submit to any backend.
+- Frontend is not yet integrated with backend endpoints.
+- Backend codebase is scaffolded with broad module coverage and core business logic, but should be validated locally with `npm install`, Prisma migration generation, and test runs before production use.
+- MVP tenant isolation is enforced in application layer (guards + scoping); PostgreSQL RLS is planned as a future hardening layer.
 
 ## Local Development
 
@@ -207,6 +246,45 @@ npm run build
 
 ```bash
 npm run test
+```
+
+## Backend Local Development
+
+### Start Dependencies
+
+```bash
+cd backend
+docker compose up -d
+```
+
+### Install + Generate + Migrate
+
+```bash
+cd backend
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+### Seed
+
+```bash
+cd backend
+npm run prisma:seed
+```
+
+### Run Backend
+
+```bash
+cd backend
+npm run start:dev
+```
+
+### Backend Tests
+
+```bash
+cd backend
+npm test
 ```
 
 ## Change Log Guidance (for future updates)
