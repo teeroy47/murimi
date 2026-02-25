@@ -80,6 +80,25 @@ This file documents how the current Murimi frontend solution was built and must 
   - `nutrition`, `breeding`, `health`, `slaughter`
   - `farm-map`, `reports`, `audit`, `sync`
 
+## Frontend <-> Backend Integration (Current)
+
+- Frontend API client:
+  - `src/lib/murimi-api.ts`
+  - `src/lib/murimi-session.ts`
+- Connection/auth setup UI:
+  - `src/pages/Settings.tsx`
+  - Replaces previous settings placeholder route
+- Current integration coverage:
+  - `Pigs` page reads live animals from `GET /farms/:farmId/animals`
+  - `PigProfile` page reads live animal details from `GET /animals/:id` (and weight record timeline if available)
+- Fallback behavior:
+  - If backend is not configured/logged in, pages continue using mock data
+  - If API request fails, UI shows an error message and falls back to mock data
+- Frontend session storage keys (localStorage):
+  - API base URL
+  - access token / refresh token
+  - active farm id (`x-farm-id` header source)
+
 ## Layout / Navigation
 
 - `src/components/AppLayout.tsx`
@@ -218,7 +237,7 @@ Defined in `src/App.tsx`:
 - Some UI strings show character encoding artifacts (garbled emoji/punctuation) in a few files.
 - `src/pages/Index.tsx` exists as template/fallback content but is not used by current routing.
 - Forms are currently presentation-only and do not submit to any backend.
-- Frontend is not yet integrated with backend endpoints.
+- Frontend is partially integrated (Settings login + Pigs list/profile). Most modules still use mock data.
 - Backend codebase is scaffolded with broad module coverage and core business logic, but should be validated locally with `npm install`, Prisma migration generation, and test runs before production use.
 - MVP tenant isolation is enforced in application layer (guards + scoping); PostgreSQL RLS is planned as a future hardening layer.
 
@@ -235,6 +254,14 @@ npm install
 ```bash
 npm run dev
 ```
+
+### Frontend Env (optional)
+
+```bash
+copy .env.example .env
+```
+
+- `VITE_API_BASE_URL` defaults to `http://localhost:3001/api` if not set.
 
 ### Build
 

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Filter, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiRequest } from "@/lib/murimi-api";
+import { getActiveFarmId, getConnectionSnapshot } from "@/lib/murimi-session";
 
 type Stage = "piglet" | "grower" | "finisher" | "sow" | "boar";
 type HealthStatus = "healthy" | "treatment" | "watch";
@@ -25,6 +28,14 @@ interface Pig {
   batch: string;
   slaughterEligible: boolean;
 }
+
+type ApiAnimal = {
+  id: string;
+  tag: string;
+  stage: string;
+  status: string;
+  currentPenId?: string | null;
+};
 
 const stageBadge: Record<Stage, string> = {
   piglet: "bg-info/15 text-info",
@@ -55,8 +66,35 @@ export default function Pigs() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const navigate = useNavigate();
+  const connection = getConnectionSnapshot();
+  const farmId = getActiveFarmId();
 
-  const filtered = mockPigs.filter((pig) => {
+  const animalsQuery = useQuery({
+    queryKey: ["animals", farmId],
+    enabled: connection.isConfigured,
+    queryFn: async () =>
+      apiRequest<{ items: ApiAnimal[]; total: number }>(`/farms/${farmId}/animals`, {
+        farmScoped: true,
+      }),
+    retry: false,
+  });
+
+  const apiPigs: Pig[] = useMemo(() => {
+    const items = animalsQuery.data?.items ?? [];
+    return items.map((animal) => ({
+      id: animal.id,
+      pen: animal.currentPenId ? `ID:${animal.currentPenId.slice(0, 6)}` : "-",
+      lastWeight: 0,
+      stage: animal.stage.toLowerCase() as Stage,
+      health: "healthy",
+      batch: "-",
+      slaughterEligible: animal.status !== "SLAUGHTERED",
+    }));
+  }, [animalsQuery.data]);
+
+  const sourcePigs = apiPigs.length ? apiPigs : mockPigs;
+
+  const filtered = sourcePigs.filter((pig) => {
     const matchesSearch = pig.id.toLowerCase().includes(search.toLowerCase()) ||
       pig.pen.toLowerCase().includes(search.toLowerCase());
     const matchesStage = stageFilter === "all" || pig.stage === stageFilter;
@@ -68,7 +106,10 @@ export default function Pigs() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold">Pigs</h1>
-          <p className="text-sm text-muted-foreground">{mockPigs.length} animals registered</p>
+          <p className="text-sm text-muted-foreground">
+            {sourcePigs.length} animals registered
+            {apiPigs.length > 0 ? " (live)" : " (mock)"}
+          </p>
         </div>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
@@ -102,6 +143,17 @@ export default function Pigs() {
           </SelectContent>
         </Select>
       </div>
+
+      {!connection.isConfigured && (
+        <p className="text-xs text-muted-foreground">
+          Backend not configured. Go to Settings to login and select a farm.
+        </p>
+      )}
+      {animalsQuery.error && (
+        <p className="text-xs text-destructive">
+          Backend load failed: {(animalsQuery.error as Error).message}. Showing mock data.
+        </p>
+      )}
 
       {/* Pig List */}
       <div className="grid gap-2">

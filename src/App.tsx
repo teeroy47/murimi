@@ -13,6 +13,7 @@ import Health from "./pages/Health";
 import Slaughter from "./pages/Slaughter";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -34,7 +35,7 @@ const App = () => (
             <Route path="/farm-map" element={<PlaceholderPage title="Farm Map" description="Interactive farm map with pen layouts, water points, and feed stores." />} />
             <Route path="/reports" element={<PlaceholderPage title="Reports & Insights" description="FCR trends, feed usage, breeding success, and slaughter statistics." />} />
             <Route path="/audit" element={<PlaceholderPage title="Audit Log" description="Complete audit trail of all farm operations and user actions." />} />
-            <Route path="/settings" element={<PlaceholderPage title="Settings" description="Farm branding, user roles, permissions, and sync configuration." />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppLayout>

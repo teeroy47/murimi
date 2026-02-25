@@ -159,6 +159,7 @@ model Role {
   updatedAt       DateTime         @updatedAt
   farm            Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
   memberships     Membership[]
+  farmInvites     FarmInvite[]
   rolePermissions RolePermission[]
 
   @@unique([farmId, name])
@@ -247,6 +248,9 @@ model Pen {
   farm         Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
   section      Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   animals      Animal[] @relation("AnimalCurrentPen")
+  feedingEvents FeedingEvent[]
+  waterChecks   WaterCheck[]
+  symptomEvents SymptomEvent[]
 
   @@unique([farmId, code])
   @@index([farmId, sectionId])
